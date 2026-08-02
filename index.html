@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VELORAPAY - Ghana's Fintech</title>
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{background:#0a0a0a;color:#fff;min-height:100vh}
+.header{background:linear-gradient(135deg,#00ff88,#00cc6a);color:#000;padding:20px;text-align:center}
+.header h1{font-size:28px;font-weight:900}
+.tabs{display:flex;background:#1a1a1a;overflow-x:auto}
+.tab{flex:1;padding:15px;text-align:center;cursor:pointer;border:none;background:none;color:#aaa;font-weight:600}
+.tab.active{background:#00ff88;color:#000}
+.content{padding:20px;max-width:500px;margin:0 auto}
+.card{background:#1a1a1a;padding:20px;border-radius:15px;margin-bottom:15px;border:1px solid #2a2a2a}
+.balance-box{text-align:center;padding:30px;background:linear-gradient(135deg,#00ff88,#00cc6a);border-radius:15px;color:#000;margin-bottom:20px}
+.balance{font-size:40px;font-weight:900}
+.btn{width:100%;padding:15px;background:#00ff88;color:#000;border:none;border-radius:10px;font-weight:800;font-size:16px;cursor:pointer;margin:8px 0}
+.btn:hover{background:#00cc6a}
+.btn-danger{background:#ff4444;color:#fff}
+input,select{width:100%;padding:14px;background:#2a2a2a;border:1px solid #333;border-radius:10px;color:#fff;font-size:16px;margin:8px 0}
+.notif{position:fixed;top:20px;right:20px;background:#00ff88;color:#000;padding:15px 20px;border-radius:10px;display:none;z-index:999;font-weight:700}
+.history-item{background:#2a2a2a;padding:15px;border-radius:10px;margin:10px 0;border-left:4px solid #00ff88}
+.pending{border-left-color:orange} .success{border-left-color:#00ff88}
+.status{font-size:12px;font-weight:700;padding:4px 8px;border-radius:5px;display:inline-block}
+.status.pending{background:orange;color:#000} .status.success{background:#00ff88;color:#000}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>💚 VELORAPAY</h1>
+  <p>Ghana's Trusted Fintech</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('home')">Home</button>
+  <button class="tab" onclick="showTab('send')">Send Money</button>
+  <button class="tab" onclick="showTab('airtime')">Airtime</button>
+  <button class="tab" onclick="showTab('history')">History</button>
+</div>
+
+<div class="content">
+
+  <div id="home" class="tab-content">
+    <div class="balance-box">
+      <p>Available Balance</p>
+      <div class="balance" id="balance">GHS 0.00</div>
+    </div>
+    <div class="card">
+      <button class="btn" onclick="deposit()">+ Deposit Money</button>
+      <button class="btn btn-danger" onclick="withdraw()">Withdraw Money</button>
+    </div>
+    <div class="card">
+      <h3>Quick Actions</h3>
+      <button class="btn" onclick="showTab('send')">Send Money</button>
+      <button class="btn" onclick="showTab('airtime')">Buy Airtime/Data</button>
+    </div>
+  </div>
+
+  <div id="send" class="tab-content" style="display:none">
+    <div class="card">
+      <h3>Send Money</h3>
+      <input id="sendNum" placeholder="Recipient Phone 0244XXXXXX">
+      <input id="sendAmt" type="number" placeholder="Amount GHS">
+      <button class="btn" onclick="sendMoney()">Send Money +1% Fee</button>
+      <p style="font-size:12px;color:#aaa;margin-top:10px">*Money sends instantly to other VELORAPAY users</p>
+    </div>
+  </div>
+
+  <div id="airtime" class="tab-content" style="display:none">
+    <div class="card">
+      <h3>Buy Airtime</h3>
+      <select id="airtimeNet"><option>MTN</option><option>Vodafone</option><option>AirtelTigo</option></select>
+      <input id="airtimeNum" placeholder="0244123456">
+      <input id="airtimeAmt" type="number" placeholder="Amount GHS">
+      <button class="btn" onclick="buyAirtime()">Buy Airtime +1% Fee</button>
+    </div>
+    <div class="card">
+      <h3>Buy Data</h3>
+      <select id="dataNet"><option>MTN</option><option>Vodafone</option><option>AirtelTigo</option></select>
+      <input id="dataNum" placeholder="0244123456">
+      <select id="dataPack">
+        <option value="5">1GB - GHS 5.00</option>
+        <option value="10">3GB - GHS 10.00</option>
+        <option value="20">6GB - GHS 20.00</option>
+      </select>
+      <button class="btn" onclick="buyData()">Buy Data +1% Fee</button>
+    </div>
+  </div>
+
+  <div id="history" class="tab-content" style="display:none">
+    <div class="card">
+      <h3>Transaction History</h3>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+let balance = parseFloat(localStorage.getItem('velora_balance')) || 0;
+let history = JSON.parse(localStorage.getItem('velora_history')) || [];
+const PAYSTACK_KEY = 'pk_test_YOUR_KEY_HERE'; // PUT YOUR REAL PAYSTACK KEY HERE
+
+function save(){
+  localStorage.setItem('velora_balance', balance);
+  localStorage.setItem('velora_history', JSON.stringify(history));
+  document.getElementById('balance').innerText = 'GHS ' + balance.toFixed(2);
+  renderHistory();
+}
+function showTab(tab){
+  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(tab).style.display='block';
+  event.target.classList.add('active');
+}
+function showNotification(msg){
+  const n = document.getElementById('notif');
+  n.innerText = msg; n.style.display='block';
+  setTimeout(()=>n.style.display='none', 4000);
+}
+function renderHistory(){
+  const h = document.getElementById('historyList');
+  if(history.length === 0){ h.innerHTML = '<p style="color:#aaa">No transactions yet</p>'; return; }
+  h.innerHTML = history.map(tx => 
+    `<div class="history-item ${tx.status}">
+      <b>${tx.type}</b> <span class="status ${tx.status}">${tx.status}</span><br>
+      Amount: GHS ${tx.amount}<br>
+      To: ${tx.to}<br>
+      <small>${tx.time}</small>
+    </div>`
+  ).join('');
+}
+
+function paystackPayment(amount, callback){
+  let handler = PaystackPop.setup({
+    key: PAYSTACK_KEY,
+    email: 'user@velorapay.com',
+    amount: amount * 100,
+    currency: 'GHS',
+    callback: function(response){ callback(response); },
+    onClose: function(){ showNotification('Payment cancelled'); }
+  });
+  handler.openIframe();
+}
+
+function deposit(){
+  let amount = prompt('Enter amount to deposit:');
+  if(!amount || amount < 1) return;
+  paystackPayment(amount, ()=>{
+    balance += parseFloat(amount);
+    addHistory('DEPOSIT', amount, 'Paystack', 'success');
+    showNotification('✅ Deposit Successful!');
+    save();
+  });
+}
+
+function sendMoney(){
+  let num = document.getElementById('sendNum').value;
+  let amt = parseFloat(document.getElementById('sendAmt').value);
+  if(!num || !amt) return showNotification('Fill all fields');
+  let fee = amt * 0.01; let total = amt + fee;
+  if(balance < total) return showNotification('Insufficient balance');
+  balance -= total;
+  addHistory('SEND MONEY', amt, num, 'success');
+  showNotification(`✅ GHS ${amt} Sent to ${num}`);
+  save();
+}
+
+function buyAirtime(){
+  let net = document.getElementById('airtimeNet').value;
+  let num = document.getElementById('airtimeNum').value;
+  let amt = parseFloat(document.getElementById('airtimeAmt').value);
+  if(!num || !amt) return showNotification('Fill all fields');
+  let fee = amt * 0.01; let total = amt + fee;
+  if(balance < total) return showNotification('Insufficient balance');
+  paystackPayment(total, ()=>{
+    balance -= total;
+    addHistory('AIRTIME', amt, `${net} ${num}`, 'pending');
+    showNotification(`✅ Order Received! ${amt} Airtime to ${num}. Check SMS in 5 mins`);
+    save();
+  });
+}
+
+function buyData(){
+  let net = document.getElementById('dataNet').value;
+  let num = document.getElementById('dataNum').value;
+  let amt = parseFloat(document.getElementById('dataPack').value);
+  if(!num) return showNotification('Enter number');
+  let fee = amt * 0.01; let total = amt + fee;
+  if(balance < total) return showNotification('Insufficient balance');
+  paystackPayment(total, ()=>{
+    balance -= total;
+    addHistory('DATA', amt, `${net} ${num}`, 'pending');
+    showNotification(`✅ Order Received! Data to ${num}. Check SMS in 5 mins`);
+    save();
+  });
+}
+
+function withdraw(){
+  let amount = prompt('Enter amount to withdraw:');
+  if(!amount || amount > balance) return showNotification('Invalid amount');
+  balance -= parseFloat(amount);
+  addHistory('WITHDRAWAL', amount, 'Your Bank/MoMo', 'pending');
+  showNotification('⏳ Go to Paystack Dashboard to withdraw this money');
+  save();
+}
+
+function addHistory(type, amount, to, status){
+  history.unshift({type, amount, to, status, time: new Date().toLocaleString()});
+}
+
+save();
+</script>
+</body>
+</html>
